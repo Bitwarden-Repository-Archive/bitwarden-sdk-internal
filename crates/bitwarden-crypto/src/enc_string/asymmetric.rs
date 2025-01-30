@@ -9,7 +9,7 @@ use super::{from_b64_vec, split_enc_string};
 use crate::{
     error::{CryptoError, EncStringParseError, Result},
     rsa::encrypt_rsa2048_oaep_sha1,
-    AsymmetricCryptoKey, AsymmetricEncryptable, KeyDecryptable,
+    AsymmetricCryptoKey, AsymmetricEncryptable, Decodable, KeyDecryptable,
 };
 // This module is a workaround to avoid deprecated warnings that come from the ZeroizeOnDrop
 // macro expansion
@@ -171,8 +171,11 @@ impl AsymmetricEncString {
     }
 }
 
-impl KeyDecryptable<AsymmetricCryptoKey, Vec<u8>> for AsymmetricEncString {
-    fn decrypt_with_key(&self, key: &AsymmetricCryptoKey) -> Result<Vec<u8>> {
+impl<O> KeyDecryptable<AsymmetricCryptoKey, O> for AsymmetricEncString
+where
+    Vec<u8>: Decodable<O>,
+{
+    fn decrypt_with_key(&self, key: &AsymmetricCryptoKey) -> Result<O> {
         use AsymmetricEncString::*;
         match self {
             Rsa2048_OaepSha256_B64 { data } => key.key.decrypt(Oaep::new::<sha2::Sha256>(), data),
@@ -187,13 +190,7 @@ impl KeyDecryptable<AsymmetricCryptoKey, Vec<u8>> for AsymmetricEncString {
             }
         }
         .map_err(|_| CryptoError::KeyDecrypt)
-    }
-}
-
-impl KeyDecryptable<AsymmetricCryptoKey, String> for AsymmetricEncString {
-    fn decrypt_with_key(&self, key: &AsymmetricCryptoKey) -> Result<String> {
-        let dec: Vec<u8> = self.decrypt_with_key(key)?;
-        String::from_utf8(dec).map_err(|_| CryptoError::InvalidUtf8String)
+        .and_then(|d| d.try_decode())
     }
 }
 

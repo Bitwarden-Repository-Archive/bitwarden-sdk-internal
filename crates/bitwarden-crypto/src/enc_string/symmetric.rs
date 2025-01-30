@@ -8,7 +8,7 @@ use serde::Deserialize;
 use super::{check_length, from_b64, from_b64_vec, split_enc_string};
 use crate::{
     error::{CryptoError, EncStringParseError, Result},
-    KeyDecryptable, KeyEncryptable, LocateKey, SymmetricCryptoKey,
+    Decodable, Encodable, KeyDecryptable, KeyEncryptable, LocateKey, SymmetricCryptoKey,
 };
 
 #[cfg(feature = "wasm")]
@@ -229,18 +229,22 @@ impl EncString {
 }
 
 impl LocateKey for EncString {}
-impl KeyEncryptable<SymmetricCryptoKey, EncString> for &[u8] {
+
+impl<T: Encodable<Vec<u8>>> KeyEncryptable<SymmetricCryptoKey, EncString> for T {
     fn encrypt_with_key(self, key: &SymmetricCryptoKey) -> Result<EncString> {
         EncString::encrypt_aes256_hmac(
-            self,
+            &self.encode(),
             key.mac_key.as_ref().ok_or(CryptoError::InvalidMac)?,
             &key.key,
         )
     }
 }
 
-impl KeyDecryptable<SymmetricCryptoKey, Vec<u8>> for EncString {
-    fn decrypt_with_key(&self, key: &SymmetricCryptoKey) -> Result<Vec<u8>> {
+impl<O> KeyDecryptable<SymmetricCryptoKey, O> for EncString
+where
+    Vec<u8>: Decodable<O>,
+{
+    fn decrypt_with_key(&self, key: &SymmetricCryptoKey) -> Result<O> {
         match self {
             EncString::AesCbc256_B64 { iv, data } => {
                 if key.mac_key.is_some() {
@@ -248,7 +252,7 @@ impl KeyDecryptable<SymmetricCryptoKey, Vec<u8>> for EncString {
                 }
 
                 let dec = crate::aes::decrypt_aes256(iv, data.clone(), &key.key)?;
-                Ok(dec)
+                Ok(dec.try_decode()?)
             }
             EncString::AesCbc128_HmacSha256_B64 { iv, mac, data } => {
                 // TODO: SymmetricCryptoKey is designed to handle 32 byte keys only, but this
@@ -258,34 +262,15 @@ impl KeyDecryptable<SymmetricCryptoKey, Vec<u8>> for EncString {
                 let enc_key = key.key[0..16].into();
                 let mac_key = key.key[16..32].into();
                 let dec = crate::aes::decrypt_aes128_hmac(iv, mac, data.clone(), mac_key, enc_key)?;
-                Ok(dec)
+                Ok(dec.try_decode()?)
             }
             EncString::AesCbc256_HmacSha256_B64 { iv, mac, data } => {
                 let mac_key = key.mac_key.as_ref().ok_or(CryptoError::InvalidMac)?;
                 let dec =
                     crate::aes::decrypt_aes256_hmac(iv, mac, data.clone(), mac_key, &key.key)?;
-                Ok(dec)
+                Ok(dec.try_decode()?)
             }
         }
-    }
-}
-
-impl KeyEncryptable<SymmetricCryptoKey, EncString> for String {
-    fn encrypt_with_key(self, key: &SymmetricCryptoKey) -> Result<EncString> {
-        self.as_bytes().encrypt_with_key(key)
-    }
-}
-
-impl KeyEncryptable<SymmetricCryptoKey, EncString> for &str {
-    fn encrypt_with_key(self, key: &SymmetricCryptoKey) -> Result<EncString> {
-        self.as_bytes().encrypt_with_key(key)
-    }
-}
-
-impl KeyDecryptable<SymmetricCryptoKey, String> for EncString {
-    fn decrypt_with_key(&self, key: &SymmetricCryptoKey) -> Result<String> {
-        let dec: Vec<u8> = self.decrypt_with_key(key)?;
-        String::from_utf8(dec).map_err(|_| CryptoError::InvalidUtf8String)
     }
 }
 

@@ -25,6 +25,60 @@ pub trait LocateKey {
     }
 }
 
+mod private {
+    // We can't easily add blanket impls for Encodable and Decodable to ensure the reverse impls are available,
+    // but we can mark the traits as sealed to ensure that only the intended types can implement them.
+    pub trait Sealed {}
+    impl Sealed for Vec<u8> {}
+    impl Sealed for &[u8] {}
+    impl Sealed for String {}
+    impl Sealed for &str {}
+}
+
+pub trait Encodable<To>: private::Sealed {
+    fn encode(self) -> To;
+}
+
+pub trait Decodable<To>: private::Sealed {
+    fn try_decode(self) -> Result<To, CryptoError>;
+}
+
+impl Encodable<Vec<u8>> for Vec<u8> {
+    fn encode(self) -> Vec<u8> {
+        self
+    }
+}
+
+impl Encodable<Vec<u8>> for &[u8] {
+    fn encode(self) -> Vec<u8> {
+        self.to_vec()
+    }
+}
+
+impl Decodable<Vec<u8>> for Vec<u8> {
+    fn try_decode(self) -> Result<Vec<u8>, CryptoError> {
+        Ok(self)
+    }
+}
+
+impl Encodable<Vec<u8>> for String {
+    fn encode(self) -> Vec<u8> {
+        self.into_bytes()
+    }
+}
+
+impl Encodable<Vec<u8>> for &str {
+    fn encode(self) -> Vec<u8> {
+        self.as_bytes().to_vec()
+    }
+}
+
+impl Decodable<String> for Vec<u8> {
+    fn try_decode(self) -> Result<String, CryptoError> {
+        String::from_utf8(self).map_err(|_| CryptoError::InvalidUtf8String)
+    }
+}
+
 pub trait CryptoKey {}
 
 pub trait KeyEncryptable<Key: CryptoKey, Output> {
@@ -51,13 +105,14 @@ impl<T: KeyDecryptable<Key, Output>, Key: CryptoKey, Output> KeyDecryptable<Key,
     }
 }
 
+/*
 impl<T: KeyEncryptable<Key, Output>, Key: CryptoKey, Output> KeyEncryptable<Key, Output>
     for Box<T>
 {
     fn encrypt_with_key(self, key: &Key) -> Result<Output> {
         (*self).encrypt_with_key(key)
     }
-}
+}*/
 
 impl<T: KeyDecryptable<Key, Output>, Key: CryptoKey, Output> KeyDecryptable<Key, Output>
     for Box<T>
