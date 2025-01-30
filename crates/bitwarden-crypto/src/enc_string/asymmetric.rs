@@ -1,6 +1,7 @@
 use std::{fmt::Display, str::FromStr};
 
 use base64::{engine::general_purpose::STANDARD, Engine};
+use bitwarden_common::Decodable;
 pub use internal::AsymmetricEncString;
 use rsa::Oaep;
 use serde::Deserialize;
@@ -9,7 +10,7 @@ use super::{from_b64_vec, split_enc_string};
 use crate::{
     error::{CryptoError, EncStringParseError, Result},
     rsa::encrypt_rsa2048_oaep_sha1,
-    AsymmetricCryptoKey, AsymmetricEncryptable, Decodable, KeyDecryptable,
+    AsymmetricCryptoKey, AsymmetricEncryptable, KeyDecryptable,
 };
 // This module is a workaround to avoid deprecated warnings that come from the ZeroizeOnDrop
 // macro expansion
@@ -177,7 +178,7 @@ where
 {
     fn decrypt_with_key(&self, key: &AsymmetricCryptoKey) -> Result<O> {
         use AsymmetricEncString::*;
-        match self {
+        Ok(match self {
             Rsa2048_OaepSha256_B64 { data } => key.key.decrypt(Oaep::new::<sha2::Sha256>(), data),
             Rsa2048_OaepSha1_B64 { data } => key.key.decrypt(Oaep::new::<sha1::Sha1>(), data),
             #[allow(deprecated)]
@@ -189,8 +190,8 @@ where
                 key.key.decrypt(Oaep::new::<sha1::Sha1>(), data)
             }
         }
-        .map_err(|_| CryptoError::KeyDecrypt)
-        .and_then(|d| d.try_decode())
+        .map_err(|_| CryptoError::KeyDecrypt)?
+        .try_decode()?)
     }
 }
 

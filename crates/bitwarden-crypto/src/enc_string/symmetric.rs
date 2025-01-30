@@ -8,8 +8,9 @@ use serde::Deserialize;
 use super::{check_length, from_b64, from_b64_vec, split_enc_string};
 use crate::{
     error::{CryptoError, EncStringParseError, Result},
-    Decodable, Encodable, KeyDecryptable, KeyEncryptable, LocateKey, SymmetricCryptoKey,
+    KeyDecryptable, KeyEncryptable, LocateKey, SymmetricCryptoKey,
 };
+use bitwarden_common::{Decodable, Encodable};
 
 #[cfg(feature = "wasm")]
 #[wasm_bindgen::prelude::wasm_bindgen(typescript_custom_section)]
