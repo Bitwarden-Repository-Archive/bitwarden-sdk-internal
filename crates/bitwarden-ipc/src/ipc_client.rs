@@ -7,6 +7,7 @@ use tokio::{select, sync::RwLock};
 use crate::{
     constants::CHANNEL_BUFFER_CAPACITY,
     message::{IncomingMessage, OutgoingMessage, PayloadTypeName, TypedIncomingMessage},
+    rpc::RpcPayload,
     traits::{CommunicationBackend, CryptoProvider, SessionRepository},
 };
 
@@ -268,6 +269,19 @@ where
         } else {
             receive_loop.await?
         })
+    }
+
+    pub async fn request<Payload>(
+        &self,
+        _request: Payload,
+        _timeout: Option<Duration>,
+    ) -> Result<Payload::ResponseType, Payload::ErrorType>
+    where
+        Payload: RpcPayload,
+        Payload: TryInto<OutgoingMessage>,
+        Payload::ResponseType: TryFrom<Vec<u8>>,
+    {
+        todo!()
     }
 }
 
