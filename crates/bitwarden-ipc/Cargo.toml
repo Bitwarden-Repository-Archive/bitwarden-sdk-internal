@@ -15,7 +15,7 @@ wasm = [
     "dep:wasm-bindgen",
     "dep:wasm-bindgen-futures",
     "dep:js-sys",
-    "bitwarden-error/wasm"
+    "bitwarden-error/wasm",
 ] # WASM support
 
 [dependencies]
@@ -27,6 +27,7 @@ serde_json = { workspace = true }
 thiserror = { workspace = true }
 tokio = { features = ["sync", "time", "rt"], workspace = true }
 tsify-next = { workspace = true, optional = true }
+uuid = { workspace = true }
 wasm-bindgen = { workspace = true, optional = true }
 wasm-bindgen-futures = { workspace = true, optional = true }
 
