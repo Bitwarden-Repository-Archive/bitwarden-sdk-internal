@@ -9,7 +9,7 @@ use crate::{
     constants::CHANNEL_BUFFER_CAPACITY,
     endpoint::Endpoint,
     message::{IncomingMessage, OutgoingMessage, PayloadTypeName, TypedIncomingMessage},
-    rpc::{payload::RpcPayload, request::RpcRequestMessage, response::RpcResponseMessage},
+    rpc::{payload::RpcRequest, request::RpcRequestMessage, response::RpcResponseMessage},
     traits::{CommunicationBackend, CryptoProvider, SessionRepository},
 };
 
@@ -295,7 +295,7 @@ where
         timeout: Option<Duration>,
     ) -> Result<Payload::Response, RequestError<Crypto::SendError>>
     where
-        Payload: RpcPayload + Serialize + for<'de> serde::de::Deserialize<'de>,
+        Payload: RpcRequest + Serialize + for<'de> serde::de::Deserialize<'de>,
         Payload::Response: Serialize + for<'de> serde::de::Deserialize<'de>,
     {
         let request_id = uuid::Uuid::new_v4().to_string();
@@ -760,7 +760,7 @@ mod tests {
             result: i32,
         }
 
-        impl RpcPayload for TestRequest {
+        impl RpcRequest for TestRequest {
             type Response = TestResponse;
 
             fn name() -> String {
