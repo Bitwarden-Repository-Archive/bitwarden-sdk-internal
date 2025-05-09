@@ -9,7 +9,7 @@ use crate::{
     constants::CHANNEL_BUFFER_CAPACITY,
     endpoint::Endpoint,
     message::{IncomingMessage, OutgoingMessage, PayloadTypeName, TypedIncomingMessage},
-    rpc::{payload::RpcPayload, request::RpcRequestMessage, response::RpcResponse},
+    rpc::{payload::RpcPayload, request::RpcRequestMessage, response::RpcResponseMessage},
     traits::{CommunicationBackend, CryptoProvider, SessionRepository},
 };
 
@@ -328,14 +328,14 @@ where
             .await
             .map_err(|e| RequestError::<Crypto::SendError>::Receive(e.into()))?;
 
-        let response: Result<RpcResponse<Payload>, _> = incoming_message
-            .payload
-            .try_into()
-            .map_err(|e: <RpcResponse<Payload> as TryInto<Vec<u8>>>::Error| {
-                RequestError::<Crypto::SendError>::Typing(e.to_string())
-            });
+        let response: Result<RpcResponseMessage<Payload>, _> =
+            incoming_message.payload.try_into().map_err(
+                |e: <RpcResponseMessage<Payload> as TryInto<Vec<u8>>>::Error| {
+                    RequestError::<Crypto::SendError>::Typing(e.to_string())
+                },
+            );
 
-        Ok(response?.payload)
+        Ok(response?.response)
     }
 }
 
@@ -745,7 +745,7 @@ mod tests {
     }
 
     mod request {
-        use crate::rpc::{request::RpcRequestMessage, response::RpcResponse};
+        use crate::rpc::{request::RpcRequestMessage, response::RpcResponseMessage};
 
         use super::*;
 
@@ -807,8 +807,8 @@ mod tests {
             assert_eq!(outgoing_request.request, request);
 
             // Simulate receiving a response
-            let simulated_response = RpcResponse::<TestRequest> {
-                payload: response,
+            let simulated_response = RpcResponseMessage::<TestRequest> {
+                response: response,
                 request_id: outgoing_request.request_id.clone(),
                 request_type: outgoing_request.request_type.clone(),
             };
