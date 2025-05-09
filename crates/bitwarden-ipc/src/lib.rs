@@ -10,4 +10,4 @@ mod traits;
 #[cfg(feature = "wasm")]
 pub mod wasm;
 
-pub use ipc_client::IpcClient;
+pub use {ipc_client::IpcClient, rpc::handler::RpcHandler};
