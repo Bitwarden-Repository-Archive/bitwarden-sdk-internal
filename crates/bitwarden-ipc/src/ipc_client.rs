@@ -9,7 +9,10 @@ use crate::{
     constants::CHANNEL_BUFFER_CAPACITY,
     endpoint::Endpoint,
     message::{IncomingMessage, OutgoingMessage, PayloadTypeName, TypedIncomingMessage},
-    rpc::{payload::RpcRequest, request::RpcRequestMessage, response::RpcResponseMessage},
+    rpc::{
+        request::RpcRequest, request_message::RpcRequestMessage,
+        response_message::RpcResponseMessage,
+    },
     traits::{CommunicationBackend, CryptoProvider, SessionRepository},
 };
 
@@ -745,7 +748,9 @@ mod tests {
     }
 
     mod request {
-        use crate::rpc::{request::RpcRequestMessage, response::RpcResponseMessage};
+        use crate::rpc::{
+            request_message::RpcRequestMessage, response_message::RpcResponseMessage,
+        };
 
         use super::*;
 
