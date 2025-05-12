@@ -12,8 +12,8 @@ use crate::{
         TypedOutgoingMessage,
     },
     rpc::{
-        error::RpcError, request::RpcRequest, request_message::RpcRequestMessage,
-        response_message::RpcResponseMessage,
+        error::RpcError, handler_registry::RpcHandlerRegistry, request::RpcRequest,
+        request_message::RpcRequestMessage, response_message::RpcResponseMessage,
     },
     traits::{CommunicationBackend, CryptoProvider, SessionRepository},
 };
@@ -28,6 +28,7 @@ where
     communication: Com,
     sessions: Ses,
 
+    handlers: RpcHandlerRegistry,
     incoming: RwLock<Option<tokio::sync::broadcast::Receiver<IncomingMessage>>>,
     cancellation_handle: RwLock<Option<tokio::sync::watch::Sender<bool>>>,
 }
@@ -137,6 +138,7 @@ where
             communication,
             sessions,
 
+            handlers: RpcHandlerRegistry::new(),
             incoming: RwLock::new(None),
             cancellation_handle: RwLock::new(None),
         })
@@ -164,6 +166,7 @@ where
                 .expect("Sending init signal should not fail");
 
             loop {
+                let rpc_topic = RpcRequestMessage::name();
                 select! {
                     _ = cancellation_handle_rx.changed() => {
                         if *cancellation_handle_rx.borrow() {
@@ -173,6 +176,9 @@ where
                     }
                     received = client.crypto.receive(&com_receiver, &client.communication, &client.sessions) => {
                         match received {
+                            Ok(message) if message.topic == Some(rpc_topic) => {
+                                client.handle_rpc_request(message)
+                            }
                             Ok(message) => {
                                 if client_tx.send(message).is_err() {
                                     log::error!("Failed to save incoming message");
@@ -373,26 +379,71 @@ where
     }
 
     #[allow(dead_code)]
-    async fn handle_rpc_request(
-        self: &Arc<Self>,
-        _request: RpcRequestMessage,
-    ) -> Result<(), RequestError<Crypto::SendError>> {
-        // let response = self
-        //     .rpc_handler_registry
-        //     .handle(request.request_type, request.payload)
-        //     .await?;
+    fn handle_rpc_request(self: &Arc<Self>, incoming_message: IncomingMessage) {
+        let client = self.clone();
+        let future = async move {
+            let client = client.clone();
 
-        // let response_message = RpcResponseMessage {
-        //     request_id: request.request_id,
-        //     request_type: request.request_type,
-        //     response,
-        // };
+            #[derive(Debug, Error)]
+            enum HandleError {
+                #[error("Failed to deserialize request message: {0}")]
+                Deserialize(String),
 
-        // let outgoing_message: OutgoingMessage = response_message.try_into()?;
-        // self.send(outgoing_message).await?;
+                #[error("Failed to serialize response message: {0}")]
+                Serialize(String),
+            }
 
-        // Ok(())
-        todo!()
+            async fn handle(
+                incoming_message: IncomingMessage,
+                handlers: &RpcHandlerRegistry,
+            ) -> Result<OutgoingMessage, HandleError> {
+                let request: RpcRequestMessage = incoming_message.payload.try_into().map_err(
+                    |e: <RpcRequestMessage as TryFrom<Vec<u8>>>::Error| {
+                        HandleError::Deserialize(e.to_string())
+                    },
+                )?;
+
+                let response = handlers
+                    .handle(&request.request_type, request.request)
+                    .await;
+
+                let response_message = RpcResponseMessage {
+                    request_id: request.request_id,
+                    request_type: request.request_type,
+                    result: response,
+                };
+
+                let outgoing = TypedOutgoingMessage {
+                    payload: response_message,
+                    destination: incoming_message.source,
+                }
+                .try_into()
+                .map_err(
+                    |e: <TypedOutgoingMessage<RpcResponseMessage> as TryInto<
+                        OutgoingMessage,
+                    >>::Error| { HandleError::Serialize(e.to_string()) },
+                )?;
+
+                Ok(outgoing)
+            }
+
+            match handle(incoming_message, &client.handlers).await {
+                Ok(outgoing_message) => {
+                    if client.send(outgoing_message).await.is_err() {
+                        log::error!("Failed to send response message");
+                    }
+                }
+                Err(e) => {
+                    log::error!("Error handling RPC request: {:?}", e);
+                }
+            }
+        };
+
+        #[cfg(not(target_arch = "wasm32"))]
+        tokio::spawn(future);
+
+        #[cfg(target_arch = "wasm32")]
+        wasm_bindgen_futures::spawn_local(future);
     }
 }
 
@@ -950,7 +1001,7 @@ mod tests {
                     .expect("Serialization should not fail"),
                 source: Endpoint::Web { id: 9001 },
                 destination: Endpoint::BrowserBackground,
-                topic: Some(request_id.clone()),
+                topic: Some(RpcRequestMessage::name()),
             };
             communication_provider.push_incoming(
                 simulated_request_message
