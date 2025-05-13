@@ -1,8 +1,8 @@
 mod constants;
+mod discover;
 mod endpoint;
 mod ipc_client;
 mod message;
-mod ping;
 mod rpc;
 mod traits;
 
