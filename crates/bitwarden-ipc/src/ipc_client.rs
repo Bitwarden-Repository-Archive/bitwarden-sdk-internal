@@ -1,7 +1,6 @@
 use std::{sync::Arc, time::Duration};
 
 use bitwarden_error::bitwarden_error;
-use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::{select, sync::RwLock};
 
@@ -13,12 +12,8 @@ use crate::{
         TypedOutgoingMessage,
     },
     rpc::{
-        error::RpcError,
-        handler::{self},
-        handler_registry::RpcHandlerRegistry,
-        request::RpcRequest,
-        request_message::RpcRequestMessage,
-        response_message::RpcResponseMessage,
+        error::RpcError, handler_registry::RpcHandlerRegistry, request::RpcRequest,
+        request_message::RpcRequestMessage, response_message::RpcResponseMessage,
     },
     traits::{CommunicationBackend, CryptoProvider, SessionRepository},
     RpcHandler,
@@ -128,7 +123,7 @@ pub enum RequestError<SendError> {
     #[error("Failed to send message: {0}")]
     Send(SendError),
 
-    #[error(transparent)]
+    #[error("Error occured on the remote target: {0}")]
     RpcError(#[from] RpcError),
 }
 
@@ -234,10 +229,12 @@ where
     pub async fn register_rpc_handler<H>(self: &Arc<Self>, handler: H)
     where
         H: RpcHandler + Send + Sync + 'static,
-        <H as handler::RpcHandler>::Request: Serialize,
-        <H as handler::RpcHandler>::Request: for<'de> Deserialize<'de>,
-        <<H as handler::RpcHandler>::Request as RpcRequest>::Response: Serialize,
-        <<H as handler::RpcHandler>::Request as RpcRequest>::Response: for<'de> Deserialize<'de>,
+        H::Request: RpcRequest + TryFrom<Vec<u8>> + TryInto<Vec<u8>>,
+        <H::Request as RpcRequest>::Response: TryFrom<Vec<u8>> + TryInto<Vec<u8>>,
+        <H::Request as TryFrom<Vec<u8>>>::Error: std::fmt::Display,
+        <H::Request as TryInto<Vec<u8>>>::Error: std::fmt::Display,
+        <<H::Request as RpcRequest>::Response as TryFrom<Vec<u8>>>::Error: std::fmt::Display,
+        <<H::Request as RpcRequest>::Response as TryInto<Vec<u8>>>::Error: std::fmt::Display,
     {
         println!("Registering handler for {}", H::Request::name());
         self.handlers.register(handler).await;
