@@ -27,4 +27,6 @@ mod mobile;
 pub use mobile::attachment_client::{DecryptFileError, EncryptFileError};
 mod sync;
 mod totp_client;
+mod tree;
+
 pub use sync::{SyncRequest, SyncResponse};
